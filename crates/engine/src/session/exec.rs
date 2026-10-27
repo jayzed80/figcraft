@@ -23,11 +23,12 @@ fn check_params_read(spec: &CommandSpec, params: &Value, read: &HashSet<String>)
     refuse_unknown_params(spec, params, |k| read.contains(k))
 }
 
-/// Commands whose effects outlive a rollback (a new tab, the active tab, a written file, the font scan): their
+/// Commands whose effects outlive a rollback (a new tab, the active tab, a version, a written file, the font scan): their
 /// unknown parameter names are refused before they run, by their documented names.
 fn effects_outlive_rollback(id: &str) -> bool {
     id.starts_with("file.")
-        || matches!(id, "doc.switch" | "doc.nextTab" | "doc.previousTab" | "version.duplicate" | "image.place" | "text.rescanFonts")
+        || id.starts_with("version.")
+        || matches!(id, "doc.switch" | "doc.nextTab" | "doc.previousTab" | "image.place" | "text.rescanFonts")
 }
 
 fn refuse_unknown_params(spec: &CommandSpec, params: &Value, read: impl Fn(&str) -> bool) -> Result<()> {

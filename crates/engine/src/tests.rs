@@ -517,6 +517,12 @@ fn an_unknown_parameter_name_stops_a_command_before_its_effects() {
     // Tab switches and copies change the session before a post-run check could refuse them.
     s.execute("file.new", &json!({"name": "y"})).unwrap();
     let state = |s: &mut Session| s.execute("doc.list", &json!({})).unwrap().to_string();
+    s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 10, "height": 10})).unwrap();
+    s.execute("version.autosave", &json!({})).unwrap();
+    let versions = s.execute("version.list", &json!({})).unwrap().to_string();
+    assert!(versions.len() > 2, "the test needs a saved version: {versions}");
+    assert!(s.execute("version.delete", &json!({"index": 0, "zzNotAParameter": 1})).is_err());
+    assert_eq!(s.execute("version.list", &json!({})).unwrap().to_string(), versions, "version.delete removed a version");
     let before = state(&mut s);
     for id in ["doc.switch", "doc.nextTab", "doc.previousTab", "version.duplicate"] {
         assert!(s.execute(id, &json!({"index": 0, "zzNotAParameter": 1})).is_err(), "{id}");
