@@ -514,6 +514,14 @@ fn an_unknown_parameter_name_stops_a_command_before_its_effects() {
     assert!(s.execute("file.new", &json!({"nmae": "x"})).is_err());
     assert_eq!(s.execute("doc.list", &json!({})).unwrap().to_string(), tabs, "no tab was opened");
     assert!(s.execute("file.new", &json!({"name": "x"})).is_ok());
+    // Tab switches and copies change the session before a post-run check could refuse them.
+    s.execute("file.new", &json!({"name": "y"})).unwrap();
+    let state = |s: &mut Session| s.execute("doc.list", &json!({})).unwrap().to_string();
+    let before = state(&mut s);
+    for id in ["doc.switch", "doc.nextTab", "doc.previousTab", "version.duplicate"] {
+        assert!(s.execute(id, &json!({"index": 0, "zzNotAParameter": 1})).is_err(), "{id}");
+        assert_eq!(state(&mut s), before, "{id} changed the tabs");
+    }
 }
 
 #[test]

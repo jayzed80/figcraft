@@ -23,19 +23,11 @@ fn check_params_read(spec: &CommandSpec, params: &Value, read: &HashSet<String>)
     refuse_unknown_params(spec, params, |k| read.contains(k))
 }
 
-/// Commands whose effects outlive a rollback (a new tab, a written file, the font scan): their
-/// unknown parameter names are refused before they run: one the documentation doesn't mention at
-/// all, as a name or in its prose (some options are described only there).
+/// Commands whose effects outlive a rollback (a new tab, the active tab, a written file, the font scan): their
+/// unknown parameter names are refused before they run, by their documented names.
 fn effects_outlive_rollback(id: &str) -> bool {
-    id.starts_with("file.") || matches!(id, "image.place" | "text.rescanFonts")
-}
-
-fn mentioned_in_doc(spec: &CommandSpec, name: &str) -> bool {
-    let word = |c: char| c.is_ascii_alphanumeric() || c == '_';
-    spec.params.match_indices(name).any(|(i, m)| {
-        !spec.params.get(..i).and_then(|b| b.chars().next_back()).is_some_and(word)
-            && !spec.params.get(i + m.len()..).and_then(|a| a.chars().next()).is_some_and(word)
-    })
+    id.starts_with("file.")
+        || matches!(id, "doc.switch" | "doc.nextTab" | "doc.previousTab" | "version.duplicate" | "image.place" | "text.rescanFonts")
 }
 
 fn refuse_unknown_params(spec: &CommandSpec, params: &Value, read: impl Fn(&str) -> bool) -> Result<()> {
@@ -57,7 +49,7 @@ impl Session {
         let spec = find_command(id).ok_or_else(|| EngineError::UnknownCommand(id.to_string()))?;
         board::refuse_on_board(self, id)?;
         if effects_outlive_rollback(id) {
-            refuse_unknown_params(spec, params, |k| mentioned_in_doc(spec, k))?;
+            refuse_unknown_params(spec, params, |_| false)?;
         }
         // Revert replaces the document's uid: refuse before ending previews or syncing branches.
         if id == "file.revert" && self.live().doc_uid.is_some() {
