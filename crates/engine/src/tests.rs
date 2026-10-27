@@ -508,6 +508,15 @@ fn every_command_refuses_an_unknown_parameter_name() {
 }
 
 #[test]
+fn an_unknown_parameter_name_stops_a_command_before_its_effects() {
+    let mut s = sess();
+    let tabs = s.execute("doc.list", &json!({})).unwrap().to_string();
+    assert!(s.execute("file.new", &json!({"nmae": "x"})).is_err());
+    assert_eq!(s.execute("doc.list", &json!({})).unwrap().to_string(), tabs, "no tab was opened");
+    assert!(s.execute("file.new", &json!({"name": "x"})).is_ok());
+}
+
+#[test]
 fn parity_catalog_mostly_covered() {
     let (done, total, missing) = catalog::parity(&[]);
     assert!(total > 150);

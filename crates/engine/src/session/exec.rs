@@ -20,13 +20,29 @@ fn command_carries_import_bytes(id: &str, params: &Value) -> bool {
 /// rolled back) rather than report success for something that wasn't done. A misspelt `filterr`
 /// made `comment.list` list every thread.
 fn check_params_read(spec: &CommandSpec, params: &Value, read: &HashSet<String>) -> Result<()> {
+    refuse_unknown_params(spec, params, |k| read.contains(k))
+}
+
+/// Commands whose effects outlive a rollback (a new tab, a written file, the font scan): their
+/// unknown parameter names are refused before they run: one the documentation doesn't mention at
+/// all, as a name or in its prose (some options are described only there).
+fn effects_outlive_rollback(id: &str) -> bool {
+    id.starts_with("file.") || matches!(id, "image.place" | "text.rescanFonts")
+}
+
+fn mentioned_in_doc(spec: &CommandSpec, name: &str) -> bool {
+    let word = |c: char| c.is_ascii_alphanumeric() || c == '_';
+    spec.params.match_indices(name).any(|(i, m)| {
+        !spec.params.get(..i).and_then(|b| b.chars().next_back()).is_some_and(word)
+            && !spec.params.get(i + m.len()..).and_then(|a| a.chars().next()).is_some_and(word)
+    })
+}
+
+fn refuse_unknown_params(spec: &CommandSpec, params: &Value, read: impl Fn(&str) -> bool) -> Result<()> {
     let Some(given) = params.as_object() else { return Ok(()) };
     let documented = spec.param_names();
-    let unknown: Vec<&str> = given
-        .iter()
-        .filter(|(k, v)| !v.is_null() && !read.contains(k.as_str()) && !documented.contains(&k.as_str()))
-        .map(|(k, _)| k.as_str())
-        .collect();
+    let unknown: Vec<&str> =
+        given.iter().filter(|(k, v)| !v.is_null() && !read(k.as_str()) && !documented.contains(&k.as_str())).map(|(k, _)| k.as_str()).collect();
     if unknown.is_empty() {
         return Ok(());
     }
@@ -40,6 +56,9 @@ impl Session {
     pub fn execute(&mut self, id: &str, params: &Value) -> Result<Value> {
         let spec = find_command(id).ok_or_else(|| EngineError::UnknownCommand(id.to_string()))?;
         board::refuse_on_board(self, id)?;
+        if effects_outlive_rollback(id) {
+            refuse_unknown_params(spec, params, |k| mentioned_in_doc(spec, k))?;
+        }
         // Revert replaces the document's uid: refuse before ending previews or syncing branches.
         if id == "file.revert" && self.live().doc_uid.is_some() {
             return Err(EngineError::Disabled(id.into(), "leave the live session before reverting to the saved file".into()));
