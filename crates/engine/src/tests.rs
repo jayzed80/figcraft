@@ -531,6 +531,15 @@ fn an_unknown_parameter_name_stops_a_command_before_its_effects() {
     assert!(s.execute("branch.create", &json!({"name": "b", "zzNotAParameter": 1})).is_err());
     assert_eq!(state(&mut s), before, "branch.create opened a tab");
     assert!(s.execute("branch.list", &json!({})).unwrap().as_array().is_some_and(|b| b.is_empty()), "a branch was recorded");
+    // A refused undo must not consume the undo step.
+    s.execute("shape.rectangle", &json!({"x": 5, "y": 5, "width": 10, "height": 10})).unwrap();
+    let layers = |s: &mut Session| s.ds().map(|d| d.doc.nodes().count()).unwrap_or(0);
+    let with_rect = layers(&mut s);
+    assert!(s.execute("edit.undo", &json!({"zzNotAParameter": 1})).is_err());
+    assert_eq!(layers(&mut s), with_rect);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(layers(&mut s), with_rect - 1, "the refused undo used up the step");
+    let before = state(&mut s);
     for id in ["doc.switch", "doc.nextTab", "doc.previousTab", "version.duplicate"] {
         assert!(s.execute(id, &json!({"index": 0, "zzNotAParameter": 1})).is_err(), "{id}");
         assert_eq!(state(&mut s), before, "{id} changed the tabs");

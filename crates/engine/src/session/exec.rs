@@ -23,11 +23,12 @@ fn check_params_read(spec: &CommandSpec, params: &Value, read: &HashSet<String>)
     refuse_unknown_params(spec, params, |k| read.contains(k))
 }
 
-/// Commands whose effects outlive a rollback (tabs, branches, versions, libraries, preferences, written files, the font scan): their
+/// Commands whose effects outlive a rollback (tabs, branches, versions, libraries, preferences, the undo history, plugin publishing, written files, the font scan): their
 /// unknown parameter names are refused before they run, by their documented names.
 fn effects_outlive_rollback(id: &str) -> bool {
-    const FAMILIES: [&str; 10] = ["file.", "doc.", "version.", "branch.", "library.", "libraries.", "pref.", "window.", "app.", "board."];
-    FAMILIES.iter().any(|f| id.starts_with(f)) || matches!(id, "command.batch" | "image.place" | "text.rescanFonts")
+    const FAMILIES: [&str; 11] =
+        ["file.", "doc.", "version.", "branch.", "library.", "libraries.", "pref.", "window.", "app.", "board.", "plugin.directory."];
+    FAMILIES.iter().any(|f| id.starts_with(f)) || matches!(id, "command.batch" | "edit.undo" | "edit.redo" | "image.place" | "text.rescanFonts")
 }
 
 fn refuse_unknown_params(spec: &CommandSpec, params: &Value, read: impl Fn(&str) -> bool) -> Result<()> {
