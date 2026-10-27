@@ -488,6 +488,25 @@ fn every_command_survives_junk_params() {
     }
 }
 
+/// No command reports success for a parameter name it doesn't know: it used to ignore it, so a
+/// misspelt option gave a different result with nothing saying so.
+#[test]
+fn every_command_refuses_an_unknown_parameter_name() {
+    let mut accepted = Vec::new();
+    for spec in all_commands() {
+        // These write or read files, or walk the font folders; the check is the same for them.
+        if spec.id.starts_with("file.") || spec.id == "image.place" || spec.id == "text.rescanFonts" {
+            continue;
+        }
+        let mut s = sess();
+        let _ = s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 10, "height": 10}));
+        if s.execute(spec.id, &json!({"zzNotAParameter": 1})).is_ok() {
+            accepted.push(spec.id);
+        }
+    }
+    assert!(accepted.is_empty(), "these commands accepted an unknown parameter name: {accepted:?}");
+}
+
 #[test]
 fn parity_catalog_mostly_covered() {
     let (done, total, missing) = catalog::parity(&[]);

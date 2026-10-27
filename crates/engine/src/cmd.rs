@@ -50,6 +50,40 @@ impl CommandSpec {
     pub fn shortcut(&self) -> Option<&'static str> {
         crate::catalog::shortcut(self.id)
     }
+    /// The parameter names `params` documents: the first word of each entry at the top level of
+    /// its `{..}` groups (`{ids?, index | name, effect {..}}` → ids, index, name, effect).
+    pub fn param_names(&self) -> Vec<&'static str> {
+        let doc = self.params;
+        let mut names = Vec::new();
+        let mut depth = 0usize;
+        let mut entry_start = None;
+        for (i, c) in doc.char_indices() {
+            match c {
+                '{' | '(' | '[' => {
+                    if depth == 0 && c == '{' {
+                        entry_start = Some(i + 1);
+                    }
+                    depth += 1;
+                }
+                '}' | ')' | ']' => depth = depth.saturating_sub(1),
+                ',' | '|' if depth == 1 => entry_start = Some(i + 1),
+                _ => {}
+            }
+            if let Some(start) = entry_start
+                && depth == 1
+                && !c.is_whitespace()
+                && i >= start
+            {
+                entry_start = None;
+                let rest = doc.get(i..).unwrap_or_default();
+                let len = rest.find(|ch: char| !(ch.is_ascii_alphanumeric() || ch == '_')).unwrap_or(rest.len());
+                if let Some(name) = rest.get(..len).filter(|n| !n.is_empty() && !names.contains(n)) {
+                    names.push(name);
+                }
+            }
+        }
+        names
+    }
 }
 
 /// Define a command spec: `spec!(id, label, params_doc, history, run)`.

@@ -94,7 +94,8 @@ pub(super) fn set(s: &mut Session, p: &Value) -> Result<Value> {
     let props = match get(p, "props") {
         Some(Value::Object(m)) => m.clone(),
         _ => {
-            // Allow flat params: {"id": 3, "fill": "#f00"}.
+            // Allow flat params: {"id": 3, "fill": "#f00"}. `apply` refuses keys it doesn't know.
+            crate::params::read_all(p);
             let mut m = p.as_object().cloned().unwrap_or_default();
             m.remove("id");
             m.remove("ids");

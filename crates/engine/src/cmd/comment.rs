@@ -463,14 +463,20 @@ pub fn specs() -> Vec<CommandSpec> {
                 Ok(json!({"on": on}))
             }
         ),
-        spec!("comment.resolve", "Resolve comment", "{id, resolved? (default true)}", true, |s, p| {
-            let id = req_comment("comment.resolve", s, p)?;
-            let v = boolean(p, "resolved").unwrap_or(true);
-            if let Some(c) = s.doc_mut()?.comment_mut(id) {
-                c.resolved = v;
+        spec!(
+            "comment.resolve",
+            "Resolve comment",
+            "{id, resolved? (default true), author? (accepted, ignored: anyone can resolve)}",
+            true,
+            |s, p| {
+                let id = req_comment("comment.resolve", s, p)?;
+                let v = boolean(p, "resolved").unwrap_or(true);
+                if let Some(c) = s.doc_mut()?.comment_mut(id) {
+                    c.resolved = v;
+                }
+                ok()
             }
-            ok()
-        }),
+        ),
         spec!(
             "comment.move",
             "Move comment",
@@ -658,5 +664,24 @@ mod tests {
         assert!(s.doc().unwrap().comments.is_empty());
         assert!(s.undo().unwrap());
         assert_eq!(s.doc().unwrap().comments.len(), 1);
+    }
+
+    /// A parameter name the command doesn't know is refused, not ignored: a misspelt `filterr` made
+    /// `comment.list` report every thread as if no filter was given.
+    #[test]
+    fn misspelt_parameter_names_are_refused() {
+        let mut s = Session::new();
+        let c = s.execute("comment.add", &json!({"x": 10, "y": 10, "text": "a"})).unwrap();
+        let cid = c["id"].as_u64().unwrap();
+        s.execute("comment.resolve", &json!({"id": cid})).unwrap();
+        let err = s.execute("comment.list", &json!({"filterr": "open"})).unwrap_err().to_string();
+        assert!(err.contains("filterr") && err.contains("filter"), "{err}");
+        // The correct name still works, and finds nothing open.
+        let open = s.execute("comment.list", &json!({"filter": "open"})).unwrap();
+        assert!(open["comments"].as_array().unwrap().is_empty());
+        // A refused edit changes nothing.
+        let before = s.doc().unwrap().comments.len();
+        assert!(s.execute("comment.add", &json!({"x": 1, "y": 1, "text": "b", "textt": "c"})).is_err());
+        assert_eq!(s.doc().unwrap().comments.len(), before, "nothing stored");
     }
 }

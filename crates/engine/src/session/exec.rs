@@ -1,4 +1,7 @@
+use std::collections::HashSet;
+
 use super::*;
+use crate::cmd::CommandSpec;
 
 /// Whether a command, or a batch wrapping one, imports a file passed as Base64 `data`.
 fn command_carries_import_bytes(id: &str, params: &Value) -> bool {
@@ -11,6 +14,24 @@ fn command_carries_import_bytes(id: &str, params: &Value) -> bool {
         }),
         _ => false,
     }
+}
+
+/// A parameter the command neither asked for nor documents changed nothing: refuse it (the edit is
+/// rolled back) rather than report success for something that wasn't done. A misspelt `filterr`
+/// made `comment.list` list every thread.
+fn check_params_read(spec: &CommandSpec, params: &Value, read: &HashSet<String>) -> Result<()> {
+    let Some(given) = params.as_object() else { return Ok(()) };
+    let documented = spec.param_names();
+    let unknown: Vec<&str> = given
+        .iter()
+        .filter(|(k, v)| !v.is_null() && !read.contains(k.as_str()) && !documented.contains(&k.as_str()))
+        .map(|(k, _)| k.as_str())
+        .collect();
+    if unknown.is_empty() {
+        return Ok(());
+    }
+    let takes = if documented.is_empty() { "takes no parameters".to_string() } else { format!("takes {}", documented.join(", ")) };
+    Err(bad(spec.id, format!("unknown parameters: {} (`{}` {takes})", unknown.join(", "), spec.id)))
 }
 
 impl Session {
@@ -27,7 +48,8 @@ impl Session {
         self.apply_view_prefs();
         if textpreview::COMMANDS.contains(&id) {
             // A live preview is no edit: no undo step, normalisation or rollback here.
-            let r = guard::run(id, || (spec.run)(self, params));
+            let (r, read) = params::tracking_reads(|| guard::run(id, || (spec.run)(self, params)));
+            let r = r.and_then(|v| check_params_read(spec, params, &read).map(|()| v));
             if r.is_err() {
                 textpreview::end(self);
             }
@@ -44,7 +66,9 @@ impl Session {
         let before = self.ds().ok().map(|d| (d.doc.clone(), d.selection.clone(), d.page, d.uid));
         // Cut and copy write the clipboard before a later check can refuse the command.
         let clipboard_before = self.clipboard.clone();
-        let result = guard::run(id, || (spec.run)(self, params))
+        let (result, read) = params::tracking_reads(|| guard::run(id, || (spec.run)(self, params)));
+        let result = result
+            .and_then(|v| check_params_read(spec, params, &read).map(|()| v))
             .and_then(|v| self.check_instance_structure(id, &before).map(|()| v))
             .and_then(|v| self.check_preview(id, &before).map(|()| v))
             .and_then(|v| self.check_live_access(id, &before).map(|()| v))

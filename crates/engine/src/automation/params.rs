@@ -1,14 +1,56 @@
 //! Parameter parsing helpers shared by commands (lenient: agents send numbers as strings, ids as
 //! "12" or "0:12", colours as hex or CSS).
 
+use std::cell::RefCell;
+use std::collections::HashSet;
+
 use figcraft_color::{BlendMode, Color, Paint};
 use figcraft_doc::NodeId;
 use serde_json::{Value, json};
 
 use crate::{EngineError, Result, Session, bad};
 
+thread_local! {
+    /// The parameter names each running command asked for, innermost command last.
+    static READ: RefCell<Vec<HashSet<String>>> = const { RefCell::new(Vec::new()) };
+}
+
 pub fn get<'a>(p: &'a Value, key: &str) -> Option<&'a Value> {
+    note_read(key);
     p.get(key).filter(|v| !v.is_null())
+}
+
+fn note_read(key: &str) {
+    READ.with_borrow_mut(|r| {
+        if let Some(top) = r.last_mut()
+            && !top.contains(key)
+        {
+            top.insert(key.to_string());
+        }
+    });
+}
+
+/// Count every key of `p` as read, for a command that takes keys it doesn't name (flat properties).
+pub fn read_all(p: &Value) {
+    for key in p.as_object().into_iter().flat_map(|m| m.keys()) {
+        note_read(key);
+    }
+}
+
+/// Run `f` and return what it returned with the parameter names it asked for through [`get`].
+pub(crate) fn tracking_reads<T>(f: impl FnOnce() -> T) -> (T, HashSet<String>) {
+    struct Frame;
+    impl Drop for Frame {
+        fn drop(&mut self) {
+            READ.with_borrow_mut(|r| r.pop());
+        }
+    }
+    READ.with_borrow_mut(|r| r.push(HashSet::new()));
+    let frame = Frame;
+    let out = f();
+    let read = READ.with_borrow_mut(|r| r.last_mut().map(std::mem::take).unwrap_or_default());
+    drop(frame);
+    (out, read)
 }
 
 pub fn f64_of(v: &Value) -> Option<f64> {
