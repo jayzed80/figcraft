@@ -524,6 +524,13 @@ fn an_unknown_parameter_name_stops_a_command_before_its_effects() {
     assert!(s.execute("version.delete", &json!({"index": 0, "zzNotAParameter": 1})).is_err());
     assert_eq!(s.execute("version.list", &json!({})).unwrap().to_string(), versions, "version.delete removed a version");
     let before = state(&mut s);
+    // A batch's nested steps (here a new tab) run before its own unknown name could be refused.
+    let nested = json!({"commands": [{"command": "file.new", "params": {"name": "z"}}], "zzNotAParameter": 1});
+    assert!(s.execute("command.batch", &nested).is_err());
+    assert_eq!(state(&mut s), before, "command.batch opened a tab");
+    assert!(s.execute("branch.create", &json!({"name": "b", "zzNotAParameter": 1})).is_err());
+    assert_eq!(state(&mut s), before, "branch.create opened a tab");
+    assert!(s.execute("branch.list", &json!({})).unwrap().as_array().is_some_and(|b| b.is_empty()), "a branch was recorded");
     for id in ["doc.switch", "doc.nextTab", "doc.previousTab", "version.duplicate"] {
         assert!(s.execute(id, &json!({"index": 0, "zzNotAParameter": 1})).is_err(), "{id}");
         assert_eq!(state(&mut s), before, "{id} changed the tabs");

@@ -332,7 +332,7 @@ fn library_style_bindings_ignore_unrelated_local_variables() {
     assert_eq!(local, var, "the ids must collide for this test");
     let r = idv(&ex(&mut s, "shape.rectangle", json!({"width": 40, "height": 40})));
     ex(&mut s, "library.add", json!({"path": path}));
-    ex(&mut s, "library.applyStyle", json!({"library": lid, "style": "Brand", "id": r}));
+    ex(&mut s, "library.applyStyle", json!({"library": lid, "style": "Brand", "ids": [r]}));
     assert_eq!(fill(&s, r), "0000FF");
     healthy(&s);
 
