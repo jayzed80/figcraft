@@ -26,8 +26,7 @@ fn check_params_read(spec: &CommandSpec, params: &Value, read: &HashSet<String>)
 /// Commands whose effects outlive a rollback (tabs, branches, versions, libraries, preferences, the undo history, plugin publishing, written files, the font scan): their
 /// unknown parameter names are refused before they run, by their documented names.
 fn effects_outlive_rollback(id: &str) -> bool {
-    const FAMILIES: [&str; 11] =
-        ["file.", "doc.", "version.", "branch.", "library.", "libraries.", "pref.", "window.", "app.", "board.", "plugin.directory."];
+    const FAMILIES: [&str; 11] = ["file.", "doc.", "version.", "branch.", "library.", "libraries.", "pref.", "window.", "app.", "board.", "plugin."];
     FAMILIES.iter().any(|f| id.starts_with(f)) || matches!(id, "command.batch" | "edit.undo" | "edit.redo" | "image.place" | "text.rescanFonts")
 }
 

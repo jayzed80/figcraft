@@ -290,6 +290,18 @@ fn parameters_defaults_and_notifications_reach_the_plugin() {
     assert!(s.execute("plugins.runLast", &json!({})).is_err(), "the removed plugin is forgotten");
 }
 
+/// An unknown parameter name stops `plugin.remove` before it deletes the plugin: rollback restores
+/// the document, not the installed plugin or its settings.
+#[test]
+fn an_unknown_parameter_name_stops_plugin_remove_before_it_deletes() {
+    let mut s = Session::new();
+    install(&mut s, manifest("org.test.keep", "read", &[]), &script(&[], OnRefusal::Fail, ""));
+    assert!(s.execute("plugin.remove", &json!({"id": "org.test.keep", "zzNotAParameter": 1})).is_err());
+    let listed = ex(&mut s, "plugin.list", json!({}));
+    assert_eq!(listed["plugins"].as_array().map(Vec::len), Some(1), "the plugin is still installed: {listed}");
+    ex(&mut s, "plugin.remove", json!({"id": "org.test.keep"}));
+}
+
 #[test]
 fn junk_manifests_and_modules_are_refused() {
     let mut s = Session::new();
